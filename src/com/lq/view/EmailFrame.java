@@ -23,6 +23,7 @@ import com.lq.main.MainEmail;
 import com.lq.statistics.DataFilter;
 import com.lq.util.EmailUtil;
 import com.lq.util.PropertiesUtil;
+import com.lq.util.TextUtil;
 
 public class EmailFrame extends JFrame {
 	/**
@@ -48,6 +49,8 @@ public class EmailFrame extends JFrame {
 	String alertStr = "";
 	String creatorStr = "";
 	String tickNoStr = "";
+
+	String emailContent = "";
 
 	/**
 	 * Launch the application.
@@ -223,11 +226,13 @@ public class EmailFrame extends JFrame {
 						// B款内输入提示语,例如“您的下列DTS单请尽快关闭”。
 						// 下一次点击邮催发送上一次邮件；
 						// 邮件内容包含：提示语+DTS单号（之间用逗号间隔）
-						if (!"".equals(creatorStr)) {
-							// 发送上一次邮件；
-							emailUtil.sendSimpleMail(emailStr, alertStr,
-									creatorStr + " " + alertStr + ",DTS单号:" + tickNoStr);
 
+						if (!"".equals(creatorStr)) {
+							emailContent = "请" + creatorStr + " " + alertStr + "\r\n			DTS单号:" + tickNoStr + "\r\n";
+							// 发送上一次邮件；
+							emailUtil.sendSimpleMail(emailStr, alertStr, emailContent);
+							// 写txt
+							TextUtil.writeTxtFile(emailContent, new File("email记录.txt"), true);
 							// 存配置文件
 							properties.editProperty("emailAdd", emailStr);
 							properties.editProperty("alertText", alertStr);
@@ -257,9 +262,16 @@ public class EmailFrame extends JFrame {
 		JButton sendEmail = new JButton("发送邮件");
 		sendEmail.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
+
+				emailContent = "请" + creatorStr + " " + alertStr + "\r\n			DTS单号:" + tickNoStr + "\r\n";
+				emailUtil.sendSimpleMail(emailStr, alertStr, emailContent);
+
 				properties.editProperty("emailAdd", emailStr);
 				properties.editProperty("alertText", alertStr);
-				emailUtil.sendSimpleMail(emailStr, alertStr, creatorStr + " " + alertStr + ",DTS单号:" + tickNoStr);
+
+				// 写txt
+				TextUtil.writeTxtFile(emailContent, new File("email记录.txt"), true);
+
 			}
 		});
 		sendEmail.setForeground(new Color(0, 0, 0));
