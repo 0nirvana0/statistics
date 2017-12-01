@@ -1,5 +1,6 @@
 package com.lq.util;
 
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -17,6 +18,13 @@ import org.xml.sax.XMLReader;
 import org.xml.sax.helpers.DefaultHandler;
 import org.xml.sax.helpers.XMLReaderFactory;
 
+/**
+ * Excel超大数据读取，抽象Excel2007读取器。 excel2007的底层数据结构是xml文件，采用SAX的事件驱动的方法解析xml，
+ * 需要继承DefaultHandler，在遇到文件内容时， 事件会触发，这种做法可以大大降低 内存的耗费，特别使用于大数据量的文件。
+ * 
+ * @author liuqiang
+ *
+ */
 public abstract class ExcelReader extends DefaultHandler {
 	// 共享字符串表
 	private SharedStringsTable sst;
@@ -42,11 +50,14 @@ public abstract class ExcelReader extends DefaultHandler {
 
 	private int idx;
 
-	// 定义前一个元素和当前元素的位置，用来计算其中空的单元格数量，如A6和A8等
-	private String preRef = null, ref = null;
+	// 定义当前元素的位置，如A6和A8等
+	private String ref = null;
 
 	// 定义当前元素的所在列
 	private int newCellCol;
+
+	// 定义当前元素的所在列和上列元素列差
+	private int colNum;
 
 	/**
 	 * 遍历工作簿中所有的电子表格
@@ -55,7 +66,7 @@ public abstract class ExcelReader extends DefaultHandler {
 	 * @throws Exception
 	 */
 	public void process(String filename) throws Exception {
-		OPCPackage pkg = OPCPackage.open(filename);
+		OPCPackage pkg = OPCPackage.open(new FileInputStream(filename));
 		XSSFReader r = new XSSFReader(pkg);
 		SharedStringsTable sst = r.getSharedStringsTable();
 		XMLReader parser = fetchSheetParser(sst);
@@ -78,7 +89,7 @@ public abstract class ExcelReader extends DefaultHandler {
 	 * @throws Exception
 	 */
 	public void process(String filename, int sheetId) throws Exception {
-		OPCPackage pkg = OPCPackage.open(filename);
+		OPCPackage pkg = OPCPackage.open(new FileInputStream(filename));
 		XSSFReader reader = new XSSFReader(pkg);
 		SharedStringsTable sst = reader.getSharedStringsTable();
 		XMLReader parser = fetchSheetParser(sst);
@@ -110,7 +121,7 @@ public abstract class ExcelReader extends DefaultHandler {
 				// System.out.println("cellS1:" + result);
 			}
 		} else if ("b".equals(cellType)) {
-			result = "0" .equals(result)? "FALSE" : "TRUE";
+			result = "0".equals(result) ? "FALSE" : "TRUE";
 		}
 		return result;
 	}
@@ -124,19 +135,8 @@ public abstract class ExcelReader extends DefaultHandler {
 		} else if ("row".equals(name)) {
 			curRow++;
 			curCol = 0;
-		} else if ("c".equals(name)) {// 注意bug 单元格无值，只不遍历 v 或者直接跳过c v
-			// <x:c r="A1" t="s">
-			// <x:v>0</x:v>
-			// </x:c>
-			// <x:c r="C1" t="s">
-			// <x:v>1</x:v>
-			// </x:c>
-			// 前一个单元格的位置
-			if (preRef == null) {
-				preRef = attributes.getValue("r");
-			} else {
-				preRef = ref;
-			}
+		} else if ("c".equals(name)) {// 注意bug 单元格无值，值不遍历 v 或者直接跳过c v
+
 			// 当前单元格的位置
 			ref = attributes.getValue("r");
 
@@ -160,19 +160,16 @@ public abstract class ExcelReader extends DefaultHandler {
 
 		} else if ("v".equals(name)) {
 			// 补全单元格之间的空单元格
-			if (!ref.equals(preRef)) {
-				int len = countNullCell(ref, preRef);
-
-				for (int i = 0; i < len; i++) {
-					rowList.add(curCol, "");
-					curCol++;
-
-				}
-			}
 			newCellCol = countNullCell(ref, "@");
-			// TODO 和上面的逻辑应该可以合并
 			if (curCol != newCellCol) {
-
+				// 1
+				// <x:c r="A1" t="s">
+				// <x:v>0</x:v>
+				// </x:c>
+				// <x:c r="C1" t="s">
+				// <x:v>1</x:v>
+				// </x:c>
+				// 2
 				// <x:c r="D2" s="1" t="s">
 				// <x:v>4</x:v>
 				// </x:c>
@@ -181,7 +178,7 @@ public abstract class ExcelReader extends DefaultHandler {
 				// <x:c r="G2" s="1" t="s">
 				// <x:v>5</x:v>
 				// </x:c>
-				int colNum = newCellCol - curCol;
+				colNum = newCellCol - curCol;
 				for (int i = 0; i < colNum; i++) {
 					rowList.add(curCol, "");
 					curCol++;
@@ -262,21 +259,4 @@ public abstract class ExcelReader extends DefaultHandler {
 	 */
 	protected abstract void getRows(int sheetIndex, int curRow, List<String> rowList);
 
-	/**
-	 * 测试方法
-	 */
-	public static void main(String[] args) throws Exception {
-
-		long lStart = System.currentTimeMillis();
-		String file = "data/demo.xlsx";
-
-		ExcelReader reader = new ExcelReader() {
-			public void getRows(int sheetIndex, int curRow, List<String> rowList) {
-				System.out.println("Sheet:" + sheetIndex + ", Row:" + curRow + ", Data:" + rowList);
-			}
-		};
-		reader.process(file, 1);
-		System.out.println(TimeUtil.formatDuring(lStart, System.currentTimeMillis()));
-
-	}
 }
